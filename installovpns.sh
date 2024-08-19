@@ -41,6 +41,8 @@ After=network.target
 
 [Service]
 ExecStart=/usr/sbin/openvpn --config /etc/openvpn/client/%i.ovpn
+ExecStartPost=/etc/openvpn/iptables-up.sh
+ExecStopPost=/etc/openvpn/iptables-down.sh
 Restart=on-failure
 
 [Install]
@@ -52,6 +54,24 @@ if [ $? -ne 0 ]; then
     echo "Error creating the service file ${SERVICE_FILE}."
     exit 1
 fi
+
+# Create the iptables-up.sh script
+IPTABLES_UP_SCRIPT="/etc/openvpn/iptables-up.sh"
+sudo bash -c "cat > ${IPTABLES_UP_SCRIPT}" << 'EOF'
+#!/bin/bash
+# Add iptables rule to force DNS through VPN
+iptables -A OUTPUT ! -o tun0 -p udp --dport 53 -j DROP
+EOF
+sudo chmod +x ${IPTABLES_UP_SCRIPT}
+
+# Create the iptables-down.sh script
+IPTABLES_DOWN_SCRIPT="/etc/openvpn/iptables-down.sh"
+sudo bash -c "cat > ${IPTABLES_DOWN_SCRIPT}" << 'EOF'
+#!/bin/bash
+# Remove iptables rule forcing DNS through VPN
+iptables -D OUTPUT ! -o tun0 -p udp --dport 53 -j DROP
+EOF
+sudo chmod +x ${IPTABLES_DOWN_SCRIPT}
 
 # Reload systemd to acknowledge the new service
 sudo systemctl daemon-reload
