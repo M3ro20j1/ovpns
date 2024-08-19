@@ -8,24 +8,29 @@ function list_ovpn_services() {
 
 # Function to remove an ovpn@ service
 function remove_ovpn_service() {
-    SERVICE_NAME=$1
+    local SERVICE_NAME="ovpn@$1.service"
 
-    # Stop the service
-    echo "Stopping service $SERVICE_NAME..."
-    sudo systemctl stop $SERVICE_NAME
+    # Check if the service exists
+    if systemctl list-unit-files --type=service | grep -q "$SERVICE_NAME"; then
+        # Stop the service
+        echo "Stopping service $SERVICE_NAME..."
+        sudo systemctl stop "$SERVICE_NAME"
 
-    # Disable the service
-    echo "Disabling service $SERVICE_NAME..."
-    sudo systemctl disable $SERVICE_NAME
+        # Disable the service
+        echo "Disabling service $SERVICE_NAME..."
+        sudo systemctl disable "$SERVICE_NAME"
 
-    # Remove the service file
-    echo "Removing service file /etc/systemd/system/$SERVICE_NAME.service..."
-    sudo rm /etc/systemd/system/$SERVICE_NAME.service
+        # Remove the service file
+        echo "Removing service file /etc/systemd/system/$SERVICE_NAME..."
+        sudo rm /etc/systemd/system/"$SERVICE_NAME"
 
-    # Reload systemd to acknowledge the removal
-    sudo systemctl daemon-reload
+        # Reload systemd to acknowledge the removal
+        sudo systemctl daemon-reload
 
-    echo "The service $SERVICE_NAME has been removed."
+        echo "The service $SERVICE_NAME has been removed."
+    else
+        echo "The service $SERVICE_NAME does not exist."
+    fi
 }
 
 # List available ovpn@ services
@@ -41,12 +46,8 @@ while true; do
         break
     fi
 
-    # Check if the service exists
-    if systemctl list-units --type=service --state=loaded | grep -q "$SERVICE_TO_REMOVE.service"; then
-        remove_ovpn_service "$SERVICE_TO_REMOVE"
-    else
-        echo "The service $SERVICE_TO_REMOVE does not exist."
-    fi
+    # Remove the service if it exists
+    remove_ovpn_service "$SERVICE_TO_REMOVE"
 
     echo "-------------------------------------------"
     list_ovpn_services
