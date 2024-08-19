@@ -38,7 +38,7 @@ list_ovpn_services
 
 # Prompt the user to choose which services to remove
 while true; do
-    read -p "Enter the name of the ovpn@ service you want to remove (without .service) or 'q' to quit: " SERVICE_TO_REMOVE
+    read -p "Enter the name of the ovpn@ service you want to remove (without ovpn@ and .service) or 'q' to quit: " SERVICE_TO_REMOVE
 
     # Exit the script if the user types 'q'
     if [[ "$SERVICE_TO_REMOVE" == "q" ]]; then
