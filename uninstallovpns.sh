@@ -3,7 +3,7 @@
 # Function to list ovpn@ services
 function list_ovpn_services() {
     echo "Available ovpn@ services:"
-    systemctl list-units --type=service --state=loaded | grep 'ovpn@' | awk '{print $1}' | sed 's/\.service$//'
+    systemctl list-unit-files --type=service | grep 'ovpn@' | awk '{print $1, $2}'
 }
 
 # Function to remove an ovpn@ service
