@@ -60,7 +60,12 @@ IPTABLES_UP_SCRIPT="/etc/openvpn/iptables-up.sh"
 sudo bash -c "cat > ${IPTABLES_UP_SCRIPT}" << 'EOF'
 #!/bin/bash
 # Add iptables rule to force DNS through VPN
-iptables -A OUTPUT ! -o tun0 -p udp --dport 53 -j DROP
+sudo iptables -A OUTPUT -p udp --dport 53 -o ! tun0 -j REJECT
+sudo iptables -A OUTPUT -p tcp --dport 53 -o ! tun0 -j REJECT
+sudo iptables -A OUTPUT -p udp --dport 53 -o tun0 -j ACCEPT
+sudo iptables -A OUTPUT -p tcp --dport 53 -o tun0 -j ACCEPT
+sudo iptables -A OUTPUT -p udp --dport 53 -o lo -j ACCEPT
+sudo iptables -A OUTPUT -p tcp --dport 53 -o lo -j ACCEPT
 EOF
 sudo chmod +x ${IPTABLES_UP_SCRIPT}
 
@@ -69,7 +74,12 @@ IPTABLES_DOWN_SCRIPT="/etc/openvpn/iptables-down.sh"
 sudo bash -c "cat > ${IPTABLES_DOWN_SCRIPT}" << 'EOF'
 #!/bin/bash
 # Remove iptables rule forcing DNS through VPN
-iptables -D OUTPUT ! -o tun0 -p udp --dport 53 -j DROP
+sudo iptables -D OUTPUT -p udp --dport 53 -o ! tun0 -j REJECT
+sudo iptables -D OUTPUT -p tcp --dport 53 -o ! tun0 -j REJECT
+sudo iptables -D OUTPUT -p udp --dport 53 -o tun0 -j ACCEPT
+sudo iptables -D OUTPUT -p tcp --dport 53 -o tun0 -j ACCEPT
+sudo iptables -D OUTPUT -p udp --dport 53 -o lo -j ACCEPT
+sudo iptables -D OUTPUT -p tcp --dport 53 -o lo -j ACCEPT
 EOF
 sudo chmod +x ${IPTABLES_DOWN_SCRIPT}
 
