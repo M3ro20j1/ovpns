@@ -179,7 +179,7 @@ check_ipv6_connectivity() {
 store_ip() {
   local ip=$1
   echo "$ip" > /tmp/last_ip.txt
-  print_message "red" "Current IP ($ip) has been stored."
+  print_message "yellow" "Current IP ($ip) has been stored."
 }
 
 # Fonction pour comparer l'IP actuelle avec l'IP stockée
@@ -256,9 +256,9 @@ case "$1" in
     ;;
   
   ip)
-    print_message "yellow" "Fetching current public IP address..."
+    print_message "default" "Fetching current public IP address..." "bold"
     current_ip=$(get_external_ip)
-    print_message "yellow" "Your current public IP address is: $current_ip"
+    print_message "default" "Your current public IP address is: $current_ip"
     
     # Stocker l'adresse IP actuelle
     store_ip "$current_ip"
