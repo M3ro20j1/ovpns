@@ -10,38 +10,73 @@
 #                                             #
 ###############################################
 
-set -e
+# Centralisation des couleurs
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+BLUE='\033[0;34m'
+WHITE='\033[0;37m'
+DEFAULT='\033[39m'
+BOLD='\033[1m'
+NC='\033[0m'
 
-# Function to print messages with color
+# Gestion des messages colorés
 print_message() {
   local color=$1
   local message=$2
+  local bold=$3
+
+  # Si le troisième argument est "bold", activez le gras
+  if [ "$bold" == "bold" ]; then
+    message="${BOLD}${message}${NC}"
+  fi
+
   case $color in
     "green")
-      echo -e "\e[32m$message\e[0m"
+      echo -e "${GREEN}${message}${NC}"
       ;;
     "red")
-      echo -e "\e[31m$message\e[0m"
+      echo -e "${RED}${message}${NC}"
       ;;
     "yellow")
-      echo -e "\e[33m$message\e[0m"
+      echo -e "${YELLOW}${message}${NC}"
       ;;
     "blue")
-      echo -e "\e[34m$message\e[0m"
+      echo -e "${BLUE}${message}${NC}"
+      ;;
+    "white")
+      echo -e "${WHITE}${message}${NC}"
+      ;;
+    "default")
+      echo -e "${DEFAULT}${message}${NC}"
       ;;
     *)
-      echo "$message"
+      echo -e "$message"
       ;;
   esac
 }
 
-# Ensure jq is installed
-if ! command -v jq &> /dev/null; then
-  print_message "red" "jq is not installed. Installing jq..."
-  sudo apt-get update && sudo apt-get install -y jq
-fi
+function require_command {
+    local cmd=$1
+    local install_cmd=$2
 
-# Function to get external IP address
+    if ! command -v "$cmd" &> /dev/null; then
+        print_message "red" "$cmd is not installed. Installing $cmd..."
+        if ! sudo apt-get update && sudo apt-get install -y "$install_cmd"; then
+            print_message "red" "Failed to install $cmd. Please install it manually."
+            exit 1
+        fi
+    fi
+}
+
+# Check commands
+function check_and_install_dependencies {
+    require_command "jq" "jq"
+    require_command "curl" "curl"
+    require_command "ping" "iputils-ping" # Note: ping is usually part of iputils-ping
+}
+
+# Get public IP
 get_external_ip() {
   local ip=$(curl -s https://ident.me || curl -s https://icanhazip.com)
   if [ -z "$ip" ]; then
@@ -51,9 +86,9 @@ get_external_ip() {
   echo "$ip"
 }
 
-# Function to check DNS leaks
+# FCheck DNS leaks with dnsleaktest.com
 check_dns_leaks() {
-  print_message "blue" "Checking for DNS leaks using dnsleaktest.com..."
+  print_message "default" "Checking for DNS leaks using dnsleaktest.com..." "bold"
   local dns_servers=$(curl -s https://dnsleaktest.com/test | grep -oP '(?<=<td>)[\d\.]+(?=</td>)')
 
   if [ -z "$dns_servers" ]; then
@@ -65,9 +100,72 @@ check_dns_leaks() {
   fi
 }
 
-# Function to check for IPv6 connectivity using ping6
+###
+### DNS leaks test with bash.ws
+### Based on https://github.com/macvk/dnsleaktest
+###
+
+function increment_error_code {
+    error_code=$((error_code + 1))
+}
+
+function check_internet_connection {
+    curl --silent --head --request GET "https://${api_domain}" | grep "200 OK" > /dev/null
+    if [ $? -ne 0 ]; then
+        print_message "red" "No internet connection."
+        exit $error_code
+    fi
+    increment_error_code
+}
+
+function print_servers {
+  echo ${result_json} | \
+    jq  --monochrome-output \
+    --raw-output \
+    ".[] | select(.type == \"${1}\") | \"\(.ip)\(if .country_name != \"\" and  .country_name != false then \" [\(.country_name)\(if .asn != \"\" and .asn != false then \" \(.asn)\" else \"\" end)]\" else \"\" end)\""
+}
+
+function dnsleaktest_check() {
+    local api_domain='bash.ws'
+
+    require_command curl
+    require_command ping
+    check_internet_connection
+
+    print_message "default" "Performing additional DNS leak test using bash.ws..." "bold"
+
+    local id=$(curl --silent "https://${api_domain}/id")
+
+    for i in $(seq 1 10); do
+        ping -c 1 "${i}.${id}.${api_domain}" > /dev/null 2>&1
+    done
+
+    local result_json=$(curl --silent "https://${api_domain}/dnsleak/test/${id}?json")
+
+    local dns_count=$(print_servers "dns" | wc -l)
+
+    print_message "yellow" "Your IP:"
+    print_servers "ip"
+
+    if [ ${dns_count} -eq "0" ]; then
+        print_message "red" "No DNS servers found"
+    else
+        if [ ${dns_count} -eq "1" ]; then
+            print_message "yellow" "You use ${dns_count} DNS server:"
+        else
+            print_message "yellow" "You use ${dns_count} DNS servers:"
+        fi
+        print_servers "dns"
+    fi
+
+    print_message "yellow" "Conclusion:"
+    print_servers "conclusion"
+}
+###
+
+# Vérification de la connectivité IPv6
 check_ipv6_connectivity() {
-  print_message "blue" "Checking for IPv6 connectivity with ping6..."
+  print_message "default" "Checking for IPv6 connectivity with ping6..." "bold"
   if ping6 -c 1 google.com &> /dev/null; then
     print_message "red" "IPv6 connectivity detected. IPv6 is not properly disabled."
     return 1
@@ -77,14 +175,14 @@ check_ipv6_connectivity() {
   fi
 }
 
-# Function to store the current IP address in a file
+# Fonction pour stocker l'adresse IP actuelle
 store_ip() {
   local ip=$1
   echo "$ip" > /tmp/last_ip.txt
-  print_message "green" "Current IP ($ip) has been stored."
+  print_message "red" "Current IP ($ip) has been stored."
 }
 
-# Function to compare the current IP with the stored IP
+# Fonction pour comparer l'IP actuelle avec l'IP stockée
 compare_ip() {
   local current_ip=$1
   if [ -f /tmp/last_ip.txt ]; then
@@ -99,7 +197,7 @@ compare_ip() {
   fi
 }
 
-# Function to display help
+# Help
 show_help() {
   echo "Usage: $0 [OPTION]"
   echo "Options:"
@@ -108,32 +206,49 @@ show_help() {
   echo "  help       Display this help message"
 }
 
-# Main script execution
+# Main
 if [ $# -eq 0 ]; then
   show_help
   exit 1
 fi
 
+# Verify and install dependencies
+check_and_install_dependencies
+
 case "$1" in
   check)
-    print_message "blue" "Starting VPN/Tor leak test..."
+    print_message "default" "Check you current IP address" "bold"
     
-    # Get current public IP address
+    # Obtenir l'adresse IP publique actuelle
     current_ip=$(get_external_ip)
-    print_message "yellow" "Your current public IP address is: $current_ip"
+    print_message "default" "Your current public IP address is: $current_ip"
     
-    # Compare with the stored IP
+    # Comparer avec l'IP stockée
     compare_ip "$current_ip"
     
-    # Perform DNS leak check
+    echo ""
+
+    # Effectuer le test de fuite DNS
     check_dns_leaks
     DNS_CHECK=$?
 
-    # Perform IPv6 connectivity check
+    echo ""
+
+    # Effectuer le test de fuite DNS avec bash.ws
+    dnsleaktest_check
+    DNSLEAKTEST_CHECK=$?
+
+    echo ""
+
+    # Vérifier la connectivité IPv6
     check_ipv6_connectivity
     IPV6_CHECK=$?
 
-    if [ $DNS_CHECK -eq 0 ] && [ $IPV6_CHECK -eq 0 ]; then
+    echo ""
+
+    print_message "red" "General conclusion :" "bold"
+
+    if [ $DNS_CHECK -eq 0 ] && [ $IPV6_CHECK -eq 0 ] && [ $DNSLEAKTEST_CHECK -eq 0 ]; then
       print_message "green" "No leaks detected. Your configuration is secure."
     else
       print_message "red" "Leaks detected. Please check your configuration."
@@ -141,11 +256,11 @@ case "$1" in
     ;;
   
   ip)
-    print_message "blue" "Fetching current public IP address..."
+    print_message "yellow" "Fetching current public IP address..."
     current_ip=$(get_external_ip)
     print_message "yellow" "Your current public IP address is: $current_ip"
     
-    # Store the current IP address
+    # Stocker l'adresse IP actuelle
     store_ip "$current_ip"
     ;;
   
